@@ -5,7 +5,6 @@ describe "Fat32::Dir class methods" do
     reset_context
 
     @root    = File::SEPARATOR
-    @fs_root = '\\'
     @fat     = build(:fat)
     VirtFS.mount(@fat.fs, @root)
   end
