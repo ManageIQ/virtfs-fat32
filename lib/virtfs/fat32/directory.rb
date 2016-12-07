@@ -1,222 +1,145 @@
-require 'stringio'
+require 'ostruct'
 
-require 'fs/fat32/directory_entry'
-
-require 'memory_buffer'
-
-# ////////////////////////////////////////////////////////////////////////////
-# // Data definitions.
-
-# A Directory is basically a helper for dealing with directories. It doesn't
-# really have a structure of it's own, but builds structure when it needs to
-# using DirectoryEntry instances.
-
-# ////////////////////////////////////////////////////////////////////////////
-# // Class.
-
-module Fat32
+module VirtFS::Fat32
   class Directory
-    # Maximum LFN entry span in bytes (LFN entries *can* span clusters).
-    MAX_ENT_SIZE = 640
+    attr_accessor :bs, :cluster
 
-    # Find entry flags.
-    FE_DIR = 0
-    FE_FILE = 1
-    FE_EITHER = 2
-
-    # Get free entry behaviors.
-    # Windows 98 returns the first deleted or unallocated entry.
-    # Windows XP returns the first unallocated entry.
-    # Advantage W98: less allocation, advantage WXP: deleted entries are not overwritten.
-    GF_W98 = 0
-    GF_WXP = 1
-
-    # Initialization
     def initialize(bs, cluster = nil)
-      raise "Nil boot sector" if bs.nil?
-      cluster = bs.rootCluster if cluster.nil?
+      raise "nil boot sector"   if bs.nil?
+      cluster = bs.root_cluster if cluster.nil?
 
-      @bs = bs
-      # Allocate one cluster if cluster is zero.
-      cluster = @bs.allocClusters(0) if cluster == 0
-      @cluster = cluster
-      @data, @all_clusters = getDirData
+      self.bs = bs
+      self.cluster = cluster == 0 ? bs.alloc_clusters(0) : cluster
     end
 
-    # ////////////////////////////////////////////////////////////////////////////
-    # // Class helpers & accessors.
-
-    # Return all names in directory as a sorted string array.
-    def globNames
-      names = []
-      cluster = @cluster
-      mf = StringIO.new(@bs.getCluster(cluster))
-      loop do
-        (@bs.bytesPerCluster / DIR_ENT_SIZE - 1).times do
-          de = DirectoryEntry.new(mf.read)
-          break if de.name == ''
-          names << de.name.downcase if de.name !=
-                                       DirectoryEntry::AF_DELETED && de.name[0] != DirectoryEntry::AF_DELETED
-          mf = StringIO.new(de.unused)
-          break if mf.size == 0
+    def data
+      @data ||= begin
+        clus = cluster
+        buf = bs.cluster(clus)
+        while (data = bs.next_cluster(clus)) != nil
+          clus = data[0]
+          buf += data[1]
         end
-        data = @bs.getNextCluster(cluster)
-        break if data.nil?
-        cluster = data[0]
-        mf = StringIO.new(data[1])
+        buf
       end
-      names.sort!
     end
 
-    # Return a DirectoryEntry for a specific file (or subdirectory).
-    def findEntry(name, flags = FE_EITHER)
-      de = nil # found directory entry.
-      skip_next = found = false
-      offset = 0
-
-      # Look for appropriate records.
-      0.step(@data.length - 1, DIR_ENT_SIZE) do|offset|
-        # Check allocation status (ignore if deleted, done if not allocated).
-        alloc_flags = @data[offset]
-        next if alloc_flags == DirectoryEntry::AF_DELETED
-        break if alloc_flags == DirectoryEntry::AF_NOT_ALLOCATED
-
-        # Skip LFN entries unless it's the first (last iteration already chewed them all up).
-        attrib = @data[offset + ATTRIB_OFFSET]
-        if attrib == DirectoryEntry::FA_LFN && (alloc_flags & DirectoryEntry::AF_LFN_LAST != DirectoryEntry::AF_LFN_LAST)
-          # Also skip the next entry (it's the base entry for the last dir ent).
-          skip_next = true; next
+    def clusters
+      @clusters ||= begin
+        clus     = cluster
+        clusters = [new_cluster_status(clus, 0)]
+        while (data = bs.next_cluster(clus)) != nil
+          clus      = data[0]
+          clusters << new_cluster_status(clus, 0)
         end
-        if skip_next
-          skip_next = false; next
-        end
-
-        # If a specific type of record was requested, look for only that type.
-        # NOTE: You know, it's possible to look ahead and see what the base entry is.
-        if flags != FE_EITHER && attrib != DirectoryEntry::FA_LFN
-          next if flags == FE_DIR && (attrib & DirectoryEntry::FA_DIRECTORY == 0)
-          next if flags == FE_FILE && (attrib & DirectoryEntry::FA_DIRECTORY != 0)
-        end
-
-        # Potential match... get a DirectoryEntry & stop if found.
-        de = DirectoryEntry.new(@data[offset, MAX_ENT_SIZE])
-        # TODO: - what if the name ends with a dot & there's another dot in the name?
-        if de.name.downcase == name.downcase || de.shortName.downcase == name.downcase
-          found = true
-          break
-        end
+        clusters
       end
-      return nil unless found
-      parentLoc = offset.divmod(@bs.bytesPerCluster)
-      de.parentCluster = @all_clusters[parentLoc[0]].number
-      de.parentOffset = parentLoc[1]
-      de
     end
 
-    def mkdir(name)
-      dir = createFile(name)
-      data = FileData.new(dir, @bs)
-      dir.setAttribute(DirectoryEntry::FA_ARCHIVE, false)
-      dir.setAttribute(DirectoryEntry::FA_DIRECTORY)
-      dir.writeEntry(@bs)
-
-      # Write dot and double dot directories.
-      dot = DirectoryEntry.new; dotdot = DirectoryEntry.new
-      dot.name = "."; dotdot.name = ".."
-      dot.setAttribute(DirectoryEntry::FA_ARCHIVE, false)
-      dot.setAttribute(DirectoryEntry::FA_DIRECTORY)
-      dotdot.setAttribute(DirectoryEntry::FA_ARCHIVE, false)
-      dotdot.setAttribute(DirectoryEntry::FA_DIRECTORY)
-      buf = dot.raw + dotdot.raw
-      data.write(buf)
-      dir.firstCluster = data.firstCluster
-      dir.writeEntry(@bs)
-
-      # Update firsCluster in . and .. (if .. is root then it's 0, not 2).
-      dot.firstCluster = dir.firstCluster
-      dotdot.firstCluster = dir.parentCluster == 2 ? 0 : dir.parentCluster
-      buf = dot.raw + dotdot.raw
-      data.rewind
-      data.write(buf)
-    end
-
-    def createFile(name)
-      de = DirectoryEntry.new; de.name = name
-      until findEntry(de.shortName).nil?
-        raise "Duplicate file name: #{de.shortName}" unless de.shortName.include?("~")
-        de.incShortName
-      end
-      de.parentOffset, de.parentCluster = getFirstFreeEntry(de.numEnts)
-      de.writeEntry(@bs)
-      @data, @all_clusters = getDirData
-      de
-    end
-
-    # ////////////////////////////////////////////////////////////////////////////
-    # // Utility functions.
-
-    # Get free entry or entries in directory data. If not exist, allocate cluster.
-    def getFirstFreeEntry(num_entries = 1, behavior = GF_W98)
-      0.step(@data.size - 1, DIR_ENT_SIZE) do |offset|
-        next if @data[offset] != DirectoryEntry::AF_NOT_ALLOCATED && @data[offset] != DirectoryEntry::AF_DELETED
-        num = countFreeEntries(behavior, @data[offset..-1])
-        return offset.divmod(@bs.bytesPerCluster)[1], getClusterStatus(offset).number if num >= num_entries
-      end
-
-      # Must allocate another cluster.
-      cluster = @bs.allocClusters(@cluster)
-      @data += MemoryBuffer.create(@bs.bytesPerCluster)
-      @all_clusters << mkClusterStatus(cluster, 0)
-      return 0, cluster
-    end
-
-    # Return the number of contiguous free entries starting at buf[0] according to behavior.
-    def countFreeEntries(behavior, buf)
-      num_free = 0
-      0.step(buf.size - 1, DIR_ENT_SIZE) do |offset|
-        if isFree(buf[offset], behavior)
-          num_free += 1
-        else
-          return num_free
-        end
-      end
-      num_free
-    end
-
-    def isFree(allocStatus, behavior)
-      if behavior == GF_W98
-        return true if allocStatus == DirectoryEntry::AF_NOT_ALLOCATED || allocStatus == DirectoryEntry::AF_DELETED
-      elsif behavior == GF_WXP
-        return true if allocStatus == DirectoryEntry::AF_NOT_ALLOCATED
-      else
-        raise "Fat32Directory#isFree: Unknown behavior: #{behavior}"
-      end
-      false
-    end
-
-    def getDirData
-      allClusters = []
-      clus = @cluster
-      allClusters << mkClusterStatus(clus, 0)
-      buf = @bs.getCluster(clus); data = nil
-      while (data = @bs.getNextCluster(clus)) != nil
-        clus = data[0]; buf += data[1]
-        allClusters << mkClusterStatus(clus, 0)
-      end
-      return buf, allClusters
-    end
-
-    # TODO: - Loose this idea.
-    def mkClusterStatus(num, dirty)
+    def new_cluster_status(num, dirty)
       status = OpenStruct.new
       status.number = num
       status.dirty = dirty
       status
     end
 
-    def getClusterStatus(offset)
-      idx = offset.divmod(@bs.bytesPerCluster)[0]
-      @all_clusters[idx]
+    def cluster_status(offset)
+      cluster[offset.divmod(bs.bytes_per_cluser)[0]]
     end
-  end
-end # module Fat32
+
+    def self.deleted?(dir_entry)
+      dir_entry.name    == DirectoryEntry::AF_DELETED ||
+      dir_entry.name[0] == DirectoryEntry::AF_DELETED
+    end
+
+    def deleted?(dir_entry)
+      self.class.deleted?(dir_entry)
+    end
+
+    def max_entries_per_cluster
+      @max_entries_per_cluster ||= bs.bytes_per_cluster / DIR_ENT_SIZE - 1
+    end
+
+    def glob_names
+      names   = []
+      clus    = cluster
+      clus_io = bs.cluster_io(clus)
+
+      loop do
+        max_entries_per_cluster.times do
+          de = DirectoryEntry.new(clus_io.read)
+          names << de.name.downcase unless de.name == "" || deleted?(de)
+
+          clus_io = StringIO.new(de.unused)
+          break if clus_io.size == 0
+        end
+
+        clus = bs.next_cluster_id(clus)
+        break if clus.nil?
+        clus_io = bs.cluster_io(clus)
+      end
+
+      names.sort
+    end
+
+    def find_entry(name, flags = FE_EITHER)
+      downcased = name.downcase
+      skip_next = false
+
+      0.step(data.length - 1, DIR_ENT_SIZE) do |offset|
+        # check allocation status
+        # (ignore if deleted, done if not allocated)
+        alloc_flags = data[offset]
+        next  if DirectoryEntry.skip?(alloc_flags)
+        break if DirectoryEntry.stop?(alloc_flags)
+
+        attrib = data[offset + ATTRIB_OFFSET]
+        lfn_fa = DirectoryEntry.lfn_fa?(attrib)
+
+        # skip LFN entries unless it's the first
+        # (last iteration already chewed them all up)
+        if lfn_fa && DirectoryEntry.lfn_last?(alloc_flags)
+          skip_next = true
+          next
+        elsif skip_next
+          skip_next = false
+          next
+        end
+
+        # skip entries we are not looking for
+        # TODO instead look ahead and see what the base entry is.
+        next if !lfn_fa && (flags == FE_DIR  && !DirectoryEntry::fa_dir?(attrib)) ||
+                           (flags == FE_FILE && !DirectoryEntry::fa_file?(attrib))
+
+        # potential match, stop if found.
+        entry = DirectoryEntry.new(data[offset, MAX_ENT_SIZE])
+        found = entry.name.downcase       == downcased || # TODO handle case where name ends with a dot &
+                entry.short_name.downcase == downcased    # there's another dot in the name
+
+        if found
+          parent = offset.divmod(bs.bytes_per_cluster)
+          entry.parent_cluster = clusters[parent[0]].number
+          entry.parent_offset  = parent[1]
+          return entry
+        end
+      end
+
+      nil
+    end
+
+    def mkdir(name)
+    end
+
+    def create_file(name)
+    end
+
+    def first_free_entry(num_entries = 1, behavious = GF_W98)
+    end
+
+    def count_free_entries(behaviour, buf)
+    end
+
+    def free?(alloc_status, behaviour)
+    end
+  end # class Directory
+end # module VirtFS::Fat32
