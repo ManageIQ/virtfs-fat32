@@ -2,14 +2,18 @@ require 'ostruct'
 
 module VirtFS::Fat32
   class Directory
-    attr_accessor :bs, :cluster
+    attr_accessor :fs, :bs, :cluster
 
-    def initialize(bs, cluster = nil)
+    def initialize(fs, bs, cluster = nil)
       raise "nil boot sector"   if bs.nil?
       cluster = bs.root_cluster if cluster.nil?
 
       self.bs = bs
       self.cluster = cluster == 0 ? bs.alloc_clusters(0) : cluster
+      self.fs = fs
+    end
+
+    def close
     end
 
     def data
@@ -89,11 +93,11 @@ module VirtFS::Fat32
       0.step(data.length - 1, DIR_ENT_SIZE) do |offset|
         # check allocation status
         # (ignore if deleted, done if not allocated)
-        alloc_flags = data[offset]
+        alloc_flags = data[offset].bytes.first
         next  if DirectoryEntry.skip?(alloc_flags)
         break if DirectoryEntry.stop?(alloc_flags)
 
-        attrib = data[offset + ATTRIB_OFFSET]
+        attrib = data[offset + ATTRIB_OFFSET].bytes.first
         lfn_fa = DirectoryEntry.lfn_fa?(attrib)
 
         # skip LFN entries unless it's the first
@@ -108,8 +112,8 @@ module VirtFS::Fat32
 
         # skip entries we are not looking for
         # TODO instead look ahead and see what the base entry is.
-        next if !lfn_fa && (flags == FE_DIR  && !DirectoryEntry::fa_dir?(attrib)) ||
-                           (flags == FE_FILE && !DirectoryEntry::fa_file?(attrib))
+        next if !lfn_fa && (flags == FE_DIR  && !DirectoryEntry::dir?(attrib)) ||
+                           (flags == FE_FILE && !DirectoryEntry::file?(attrib))
 
         # potential match, stop if found.
         entry = DirectoryEntry.new(data[offset, MAX_ENT_SIZE])

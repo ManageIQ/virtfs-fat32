@@ -133,8 +133,20 @@ module VirtFS::Fat32
       (attributes & FA_DIRECTORY) != 0
     end
 
+    def self.dir?(attrib)
+      (attrib & FA_DIRECTORY) != 0
+    end
+
     def file?
       (attributes & FA_DIRECTORY) == 0
+    end
+
+    def self.file?(attrib)
+      (attrib & FA_DIRECTORY) == 0
+    end
+
+    def symlink?
+      false
     end
 
     def self.lfn_last?(flags)
@@ -202,7 +214,7 @@ module VirtFS::Fat32
     def entry_long_name(dir_entry)
       %w(name name2 name3).collect {|name|
         next if dir_entry[name].nil?
-        dir_entry[name].gsub(/\d377/, "").UnicodeToUtf8.gsub(/\d000/, "") # ?
+        dir_entry[name].gsub(/\d377/, "").UnicodeToUtf8.gsub(/\000/, "").gsub(/\uFFFF/, "")
       }.join
     end
 
