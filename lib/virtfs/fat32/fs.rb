@@ -42,7 +42,7 @@ module VirtFS::Fat32
 
     def root_dir_entry
       @root_dir_entry ||= begin
-        de = DirectoryEntry.new
+        de = DirectoryEntry.new self
         de.set_attribute(DirectoryEntry::FA_DIRECTORY)
         de.first_cluster = 0
         de.zero_time!

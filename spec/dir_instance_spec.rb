@@ -1,14 +1,6 @@
 require 'spec_helper'
 
 describe "VirtFS::Fat32::Dir instance methods" do
-  before(:all) do
-    reset_context
-
-    @root = File::SEPARATOR
-    @fat  = build(:fat)
-    VirtFS.mount(@fat.fs, @root)
-  end
-
   describe "#close" do
     it "should return nil" do
       dir = VirtFS::VDir.new(@root)

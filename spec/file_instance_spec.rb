@@ -2,16 +2,7 @@ require 'spec_helper'
 
 describe "VirtFS::FAT32::File instance methods" do
   before(:all) do
-    reset_context
-
-    @root      = File::SEPARATOR
-    @fat       = build(:fat)
     @full_path = @fat.glob_dir.first
-    VirtFS.mount(@fat.fs, @root)
-  end
-
-  after(:all) do
-    VirtFS.umount(@root)
   end
 
   before(:each) do

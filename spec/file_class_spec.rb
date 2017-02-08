@@ -2,26 +2,13 @@ require 'spec_helper'
 
 describe "Fat32::File class methods" do
   before(:all) do
-    reset_context
-
-    @root = File::SEPARATOR
-    @fat  = build(:fat)
-    VirtFS.mount(@fat.fs, @root)
-
-    @full_path   = '/d1/c'
-    @parent_path = '/d1'
+    @full_path   = "/#{@root}/d1/c"
+    @parent_path = "/#{@root}/d1"
     @rel_path    = ''
-    #@ext         = ".IMG;1"
-    #@file1_size  = 6467584
-    #@time        = Time.now
   end
 
   after(:each) do
     VirtFS::dir_chdir(@root)
-  end
-
-  after(:all) do
-    VirtFS.umount(@root)
   end
 
   describe ".atime" do

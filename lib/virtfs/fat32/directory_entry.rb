@@ -1,14 +1,33 @@
 module VirtFS::Fat32
   class DirectoryEntry
+    attr_accessor :fs
+
     attr_accessor :buffer, :dir_entry, :name, :unused
 
     attr_accessor :dirty, :parent_cluster, :parent_offset
 
-    def initialize(buffer=nil)
+    def initialize(fs, buffer=nil)
       return create if buffer.nil?
       self.buffer = buffer
+      self.fs     = fs
       #validate_checksum!
+      lfn_entries # sets dir_entry
       gen_name
+    end
+
+    def chmod(mode)
+      raise "writes not supported"
+    end
+
+    def chown(owner, group)
+      raise "writes not supported"
+    end
+
+    def truncate(len)
+      raise "writes not supported"
+    end
+
+    def close
     end
 
     def dirty!
@@ -34,10 +53,6 @@ module VirtFS::Fat32
       self.length        = 0
       self.first_cluster = 0
       self
-    end
-
-    def dir_entry
-      @dir_entry.nil? ? lfn_entries : @dir_entry
     end
 
     def atime
@@ -86,6 +101,12 @@ module VirtFS::Fat32
 
     def length
       @length ||= dir_entry['file_size']
+    end
+
+    alias :size :length
+
+    def first_cluster
+      (dir_entry['first_clus_hi'] << 16) + dir_entry['first_clus_lo']
     end
 
     def first_cluster=(cluster)
@@ -183,13 +204,12 @@ module VirtFS::Fat32
             return
           end
 
-          entry      = entry.unpack('C*')
-          lfn_fa     = lfn_fa?(entry[ATTRIB_OFFSET])
-          dir_entry  = lfn_fa ? DIR_ENT_LFN.decode(buffer) : DIR_ENT_SFN.decode(buffer)
-          lfn_ignore = lfn_ignore?(dir_entry['seq_num'])
+          entry_unpacked  = entry.unpack('C*')
+          lfn_fa          = lfn_fa?(entry_unpacked[ATTRIB_OFFSET])
+          self.dir_entry  = lfn_fa ? DIR_ENT_LFN.decode(entry) : DIR_ENT_SFN.decode(entry)
+          lfn_ignore      = lfn_ignore?(dir_entry['seq_num'])
 
           if !lfn_fa
-            self.dir_entry = dir_entry
             break
 
           elsif lfn_ignore

@@ -16,6 +16,10 @@ module VirtFS::Fat32
     def close
     end
 
+    def read(pos)
+      return cache[pos], pos + 1
+    end
+
     def data
       @data ||= begin
         clus = cluster
@@ -64,15 +68,16 @@ module VirtFS::Fat32
       @max_entries_per_cluster ||= bs.bytes_per_cluster / DIR_ENT_SIZE - 1
     end
 
-    def glob_names
+    def glob_entries
+      entries = []
       names   = []
       clus    = cluster
       clus_io = bs.cluster_io(clus)
 
       loop do
         max_entries_per_cluster.times do
-          de = DirectoryEntry.new(clus_io.read)
-          names << de.name.downcase unless de.name == "" || deleted?(de)
+          de = DirectoryEntry.new(fs, clus_io.read)
+          entries << de unless de.name == "" || deleted?(de)
 
           clus_io = StringIO.new(de.unused)
           break if clus_io.size == 0
@@ -82,8 +87,11 @@ module VirtFS::Fat32
         break if clus.nil?
         clus_io = bs.cluster_io(clus)
       end
+      entries
+    end
 
-      names.sort
+    def glob_names
+      glob_entries.collect { |e| e.name }.sort
     end
 
     def find_entry(name, flags = FE_EITHER)
@@ -102,7 +110,7 @@ module VirtFS::Fat32
 
         # skip LFN entries unless it's the first
         # (last iteration already chewed them all up)
-        if lfn_fa && DirectoryEntry.lfn_last?(alloc_flags)
+        if lfn_fa && !DirectoryEntry.lfn_last?(alloc_flags)
           skip_next = true
           next
         elsif skip_next
@@ -116,7 +124,7 @@ module VirtFS::Fat32
                            (flags == FE_FILE && !DirectoryEntry::file?(attrib))
 
         # potential match, stop if found.
-        entry = DirectoryEntry.new(data[offset, MAX_ENT_SIZE])
+        entry = DirectoryEntry.new(fs, data[offset, MAX_ENT_SIZE])
         found = entry.name.downcase       == downcased || # TODO handle case where name ends with a dot &
                 entry.short_name.downcase == downcased    # there's another dot in the name
 
@@ -144,6 +152,12 @@ module VirtFS::Fat32
     end
 
     def free?(alloc_status, behaviour)
+    end
+
+    private
+
+    def cache
+      @cache ||= glob_entries.to_a
     end
   end # class Directory
 end # module VirtFS::Fat32
