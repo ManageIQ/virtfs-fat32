@@ -1,6 +1,10 @@
 require 'spec_helper'
 
 describe "Fat32::Dir class methods" do
+  def cassette_path
+    "spec/cassettes/dir_class.yml"
+  end
+
   describe ".[]" do
     it "should return empty array when in a nonexistent directory" do
       VirtFS.cwd = "/not_a_dir" # bypass existence checks.

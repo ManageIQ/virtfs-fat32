@@ -6,7 +6,7 @@ FactoryGirl.define do
   factory :fat, class: OpenStruct do
     virtual_root ''
 
-    path { "#{virtual_root}/images/fat.fs" }
+    recording_path "spec/cassettes/template.yml"
 
     ###
 
@@ -17,5 +17,17 @@ FactoryGirl.define do
     glob_dir ['d1/c', 'd1/d', 'd1/s3']
 
     boot_size 2048
+
+    recording_root { "#{virtual_root}/images" }
+
+    recorder {
+      rec = VirtFS::CamcorderFS::FS.new(File.expand_path(recording_path))
+      rec.root = recording_root
+      rec
+    }
+
+    ###
+
+    path { "#{virtual_root}/images/fat.fs" }
   end
 end

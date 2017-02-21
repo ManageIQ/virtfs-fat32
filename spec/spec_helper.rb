@@ -5,6 +5,11 @@ require 'virtfs-nativefs-thick'
 require 'virtfs-fat32'
 require 'factory_girl'
 
+# XXX bug in camcorder (missing dependency)
+require 'fileutils'
+
+require 'virtfs-camcorderfs'
+
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = [:should, :expect]
@@ -20,14 +25,16 @@ RSpec.configure do |config|
     VirtFS.mount(VirtFS::NativeFS::Thick.new, "/")
 
     @fat = build(:fat,
+                 recording_path: cassette_path,
                  #virtual_root: Dir.pwd)
                   virtual_root: '/home/mmorsi/workspace/cfme/virtfs-fat32')
 
+    VirtFS.mount(@fat.recorder, @fat.recording_root)
+
+    @root = @fat.mount_point
     block_dev = VirtFS::BlockIO.new(VirtDisk::BlockFile.new(@fat.path))
     fatfs = VirtFS::Fat32::FS.new(block_dev)
     VirtFS.mount(fatfs, @fat.mount_point)
-
-    @root = @fat.mount_point
   end
 
   config.after(:each) do
@@ -36,6 +43,7 @@ RSpec.configure do |config|
 
   config.after(:all) do
     VirtFS.umount(@fat.mount_point)
+    VirtFS.umount(@fat.recording_root)
     VirtFS::umount("/")
   end
 end
