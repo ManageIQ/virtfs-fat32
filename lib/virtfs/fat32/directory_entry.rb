@@ -94,6 +94,10 @@ module VirtFS::Fat32
       dir_entry['first_clus_lo'] = (cluster  & 0xffff)
     end
 
+    def first_cluster
+      fc = (dir_entry['first_clus_hi'] << 16) + dir_entry['first_clus_lo']
+    end
+
     def set_attribute(attrib, set = true)
       dirty!
       if set
@@ -145,6 +149,14 @@ module VirtFS::Fat32
       (attrib & FA_DIRECTORY) == 0
     end
 
+    def self.attrib_str(attrib)
+      s = []
+      s << "fa"   if lfn_fa?(attrib)
+      s << "dir"  if dir?(attrib)
+      s << "file" if file?(attrib)
+      s.join(",")
+    end
+
     def symlink?
       false
     end
@@ -167,6 +179,15 @@ module VirtFS::Fat32
 
     def self.stop?(flags)
       flags == AF_NOT_ALLOCATED
+    end
+
+    def self.flags_str(flags)
+      s = []
+      s << "skip"   if skip?(flags)
+      s << "stop"   if stop?(flags)
+      s << "ignore" if lfn_ignore?(flags)
+      s << "last"   if lfn_last?(flags)
+      s.join(",")
     end
 
     def lfn_entries

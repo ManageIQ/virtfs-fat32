@@ -1,10 +1,10 @@
-require 'active_support/core_ext/object/try' # until we can use the safe nav operator
-
 module VirtFS::Fat32
   class FS
     module FileClassMethods
       def file_atime(p)
-        get_file(p).try(:atime)
+        f = get_file(p)
+        raise Errno::ENOENT, "No such file or directory" if f.nil?
+        f.atime
       end
 
       def file_blockdev?(p)
@@ -14,20 +14,26 @@ module VirtFS::Fat32
       end
 
       def file_chmod(permission, p)
+        raise "writes not supported"
       end
 
       def file_chown(owner, group, p)
+        raise "writes not supported"
       end
 
       def file_ctime(p)
-        get_file(p).try(:ctime)
+        f = get_file(p)
+        raise Errno::ENOENT, "No such file or directory" if f.nil?
+        f.ctime
       end
 
       def file_delete(p)
+        raise "writes not supported"
       end
 
       def file_directory?(p)
-        get_file(p).try(:dir?)
+        f = get_file(p)
+        !f.nil? && f.dir?
       end
 
       def file_executable?(p)
@@ -55,6 +61,7 @@ module VirtFS::Fat32
       end
 
       def file_lchmod(permission, p)
+        raise "writes not supported"
       end
 
       def file_lchown(owner, group, p)
@@ -66,11 +73,13 @@ module VirtFS::Fat32
       def file_lstat(p)
         file = get_file(p)
         raise Errno::ENOENT, "No such file or directory" if file.nil?
-        VirtFS::Stat.new(VirtFS::Fat32::File.new(file, boot_sector).to_h)
+        VirtFS::Stat.new(VirtFS::Fat32::File.new(self, file, boot_sector).to_h)
       end
 
       def file_mtime(p)
-        get_file(p).try(:mtime)
+        f = get_file(p)
+        raise Errno::ENOENT, "No such file or directory" if f.nil?
+        f.mtime
       end
 
       def file_owned?(p)
@@ -98,7 +107,9 @@ module VirtFS::Fat32
       end
 
       def file_size(p)
-        get_file(p).try(:length)
+        f = get_file(p)
+        raise Errno::ENOENT, "No such file or directory" if f.nil?
+        f.length
       end
 
       def file_socket?(p)
@@ -137,6 +148,9 @@ module VirtFS::Fat32
       end
 
       def file_new(f, parsed_args, _open_path, _cwd)
+        file = get_file(f)
+        raise Errno::ENOENT, "No such file or directory" if file.nil?
+        File.new(self, file, boot_sector)
       end
 
       private

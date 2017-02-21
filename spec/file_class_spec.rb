@@ -2,26 +2,9 @@ require 'spec_helper'
 
 describe "Fat32::File class methods" do
   before(:all) do
-    reset_context
-
-    @root = File::SEPARATOR
-    @fat  = build(:fat)
-    VirtFS.mount(@fat.fs, @root)
-
     @full_path   = '/d1/c'
-    @parent_path = '/d1'
-    @rel_path    = ''
-    #@ext         = ".IMG;1"
-    #@file1_size  = 6467584
-    #@time        = Time.now
-  end
-
-  after(:each) do
-    VirtFS::dir_chdir(@root)
-  end
-
-  after(:all) do
-    VirtFS.umount(@root)
+    @parent_path = "#{@root}/d1"
+    @rel_path    = 'c'
   end
 
   describe ".atime" do
@@ -50,7 +33,7 @@ describe "Fat32::File class methods" do
   describe ".chmod" do
     it "should raise error" do
       expect do
-        VirtFS::VFile.chmod(0755, "anything")
+        VirtFS::VFile.chmod(0755, "#{@root}/anything")
       end.to raise_error("writes not supported");
     end
   end
@@ -58,7 +41,7 @@ describe "Fat32::File class methods" do
   describe ".chown" do
     it "should raise error" do
       expect do
-        VirtFS::VFile.chown(1, 2, "anything")
+        VirtFS::VFile.chown(1, 2, "#{@root}/anything")
       end.to raise_error("writes not supported");
     end
   end
@@ -73,7 +56,7 @@ describe "Fat32::File class methods" do
     end
 
     it "should return a Time object, when given full path" do
-      expect(VirtFS::VFile.ctime(@full_path)).to be_kind_of(Time)
+      expect(VirtFS::VFile.ctime("#{@root}/#{@full_path}")).to be_kind_of(Time)
     end
 
     it "should return a Time object, when given relative path" do
@@ -85,7 +68,7 @@ describe "Fat32::File class methods" do
   describe ".delete" do
     it "should raise error" do
       expect do
-        VirtFS::VFile.delete("anything")
+        VirtFS::VFile.delete("#{@root}/anything")
       end.to raise_error("writes not supported");
     end
   end
@@ -110,7 +93,7 @@ describe "Fat32::File class methods" do
     end
 
     it "should return true when given a regular file" do
-      expect(VirtFS::VFile.exist?(@full_path)).to be true
+      expect(VirtFS::VFile.exist?("#{@root}/#{@full_path}")).to be true
     end
 
     it "should return true when given a directory" do
@@ -143,7 +126,7 @@ describe "Fat32::File class methods" do
     end
 
     it "should return true when given a regular file" do
-      expect(VirtFS::VFile.file?(@full_path)).to be true
+      expect(VirtFS::VFile.file?("#{@root}/#{@full_path}")).to be true
     end
 
     it "should return false when given a directory" do
@@ -183,7 +166,7 @@ describe "Fat32::File class methods" do
   describe ".lchmod" do
     it "should raise error" do
       expect do
-        VirtFS::VFile.lchmod("any", "thing")
+        VirtFS::VFile.lchmod("any", "#{@root}/thing")
       end.to raise_error("writes not supported");
     end
   end
@@ -191,7 +174,7 @@ describe "Fat32::File class methods" do
   describe ".lchown" do
     it "should raise error" do
       expect do
-        VirtFS::VFile.lchmod("any", "thing")
+        VirtFS::VFile.lchmod("any", "#{@root}/thing")
       end.to raise_error("writes not supported");
     end
   end
@@ -199,7 +182,7 @@ describe "Fat32::File class methods" do
   describe ".link" do
     it "should raise error" do
       expect do
-        VirtFS::VFile.lchmod('any', 'thing')
+        VirtFS::VFile.lchmod('any', "#{@root}/thing")
       end.to raise_error("writes not supported");
     end
   end
@@ -219,14 +202,14 @@ describe "Fat32::File class methods" do
   describe ".mtime" do
     it "should raise Errno::ENOENT when given a nonexistent file" do
       expect do
-        VirtFS::VFile.mtime("nonexistent_file")
+        VirtFS::VFile.mtime("#{@root}/nonexistent_file")
       end.to raise_error(
         Errno::ENOENT, /No such file or directory/
       )
     end
 
     it "should return a Time object, when given full path" do
-      expect(VirtFS::VFile.mtime(@full_path)).to be_kind_of(Time)
+      expect(VirtFS::VFile.mtime("#{@root}/#{@full_path}")).to be_kind_of(Time)
     end
 
     it "should return a Time object, when given relative path" do
@@ -248,7 +231,7 @@ describe "Fat32::File class methods" do
     end
 
     it "should return the known size of the file" do
-      expect(VirtFS::VFile.size(@full_path)).to eq(@file1_size)
+      expect(VirtFS::VFile.size("#{@root}/#{@full_path}")).to eq(0)
     end
 
     #it "should return 0 for empty file" do
@@ -304,7 +287,7 @@ describe "Fat32::File class methods" do
     end
 
     it "should return a File object - given full path" do
-      expect(VirtFS::VFile.new(@full_path)).to be_kind_of(VirtFS::VFile)
+      expect(VirtFS::VFile.new("#{@root}/#{@full_path}")).to be_kind_of(VirtFS::VFile)
     end
 
     it "should return a directory object - given relative path" do
@@ -323,15 +306,15 @@ describe "Fat32::File class methods" do
     end
 
     it "should return a File object - when no block given" do
-      expect(VirtFS::VFile.open(@full_path)).to be_kind_of(VirtFS::VFile)
+      expect(VirtFS::VFile.open("#{@root}/#{@full_path}")).to be_kind_of(VirtFS::VFile)
     end
 
     it "should yield a file object to the block - when block given" do
-      VirtFS::VFile.open(@full_path) { |file_obj| expect(file_obj).to be_kind_of(VirtFS::VFile) }
+      VirtFS::VFile.open("#{@root}/#{@full_path}") { |file_obj| expect(file_obj).to be_kind_of(VirtFS::VFile) }
     end
 
     it "should return the value of the block - when block given" do
-      expect(VirtFS::VFile.open(@full_path) { true }).to be true
+      expect(VirtFS::VFile.open("#{@root}/#{@full_path}") { true }).to be true
     end
   end
 end

@@ -1,8 +1,19 @@
 module VirtFS::Fat32
   class File
-    def initialize(dir_entry, boot_sector)
+    attr_accessor :fs
+
+    def initialize(fs, dir_entry, boot_sector)
+      @fs = fs
       @bs = boot_sector
       @de = dir_entry
+    end
+
+    def size
+      @de.length
+    end
+
+    def close
+      # noop
     end
 
     def to_h

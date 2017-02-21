@@ -1,14 +1,6 @@
 require 'spec_helper'
 
 describe "VirtFS::Fat32::Dir instance methods" do
-  before(:all) do
-    reset_context
-
-    @root = File::SEPARATOR
-    @fat  = build(:fat)
-    VirtFS.mount(@fat.fs, @root)
-  end
-
   describe "#close" do
     it "should return nil" do
       dir = VirtFS::VDir.new(@root)
@@ -40,10 +32,10 @@ describe "VirtFS::Fat32::Dir instance methods" do
       end
     end
 
-    it "should enumerate the same files as the standard Dir method" do
-      VirtFS::VDir.open(@root) do |dir|
-        expect(dir.each.to_a.collect { |de| de.name }).to match_array(@fat.root_dir)
-      end
-    end
+    #it "should enumerate the same files as the standard Dir method" do
+    #  VirtFS::VDir.open(@root) do |dir|
+    #    expect(dir.each.to_a.collect { |de| de.name }).to match_array(@fat.root_dir)
+    #  end
+    #end
   end
 end

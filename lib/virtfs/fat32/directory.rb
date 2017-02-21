@@ -16,6 +16,10 @@ module VirtFS::Fat32
     def close
     end
 
+    def read(pos)
+      #return find_entry(glob_names[pos]), pos + 1 ?
+    end
+
     def data
       @data ||= begin
         clus = cluster
@@ -103,11 +107,11 @@ module VirtFS::Fat32
         # skip LFN entries unless it's the first
         # (last iteration already chewed them all up)
         if lfn_fa && DirectoryEntry.lfn_last?(alloc_flags)
-          skip_next = true
+          #skip_next = true
           next
-        elsif skip_next
-          skip_next = false
-          next
+        #elsif skip_next
+        #  skip_next = false
+        #  next
         end
 
         # skip entries we are not looking for

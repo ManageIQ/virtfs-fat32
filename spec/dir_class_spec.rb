@@ -1,18 +1,6 @@
 require 'spec_helper'
 
 describe "Fat32::Dir class methods" do
-  before(:all) do
-    reset_context
-
-    @root    = File::SEPARATOR
-    @fat     = build(:fat)
-    VirtFS.mount(@fat.fs, @root)
-  end
-
-  after(:all) do
-    VirtFS.umount(@root)
-  end
-
   describe ".[]" do
     it "should return empty array when in a nonexistent directory" do
       VirtFS.cwd = "/not_a_dir" # bypass existence checks.
@@ -55,19 +43,19 @@ describe "Fat32::Dir class methods" do
   describe ".delete .rmdir .unlink" do
     it "should raise Runtime Error writes not supported" do
       expect do
-        VirtFS::VDir.delete("/not_a_dir/foo.d")
+        VirtFS::VDir.delete("#{@root}/foo.d")
       end.to raise_error(
         RuntimeError, /writes not supported/
       )
 
       expect do
-        VirtFS::VDir.mkdir("/not_a_dir")
+        VirtFS::VDir.mkdir("#{@root}/not_a_dir")
       end.to raise_error(
         RuntimeError, /writes not supported/
       )
 
       expect do
-        VirtFS::VDir.mkdir("/not_a_dir")
+        VirtFS::VDir.mkdir("#{@root}/not_a_dir")
       end.to raise_error(
         RuntimeError, /writes not supported/
       )
@@ -78,7 +66,7 @@ describe "Fat32::Dir class methods" do
   describe ".entries" do
     it "should raise RuntimeError when given a nonexistent directory" do
       expect do
-        VirtFS::VDir.entries("nonexistent_directory")
+        VirtFS::VDir.entries("#{@root}/nonexistent_directory")
       end.to raise_error(
         RuntimeError, /Can't find directory: '\/nonexistent_directory'/
       )
@@ -89,6 +77,7 @@ describe "Fat32::Dir class methods" do
     end
 
     it "should, given relative path, return the same file names as the real Dir.entries" do
+      VirtFS::VDir.chdir(@root)
       expect(VirtFS::VDir.entries(".")).to match_array(@fat.root_dir)
     end
   end
@@ -106,7 +95,7 @@ describe "Fat32::Dir class methods" do
   describe ".foreach" do
     it "should raise Errno::ENOENT when given a nonexistent directory" do
       expect do
-        VirtFS::VDir.foreach("nonexistent_directory").to_a
+        VirtFS::VDir.foreach("#{@root}/nonexistent_directory").to_a
       end.to raise_error(
         RuntimeError, /Can't find directory: '\/nonexistent_directory'/
       )
@@ -125,6 +114,7 @@ describe "Fat32::Dir class methods" do
     end
 
     it "should, given relative path, return the same file names as the real Dir.foreach" do
+      VirtFS::VDir.chdir(@root)
       expect(VirtFS::VDir.foreach(".").to_a).to match_array(@fat.root_dir)
     end
   end
@@ -140,16 +130,16 @@ describe "Fat32::Dir class methods" do
       expect(VirtFS::VDir.glob("*")).to match_array(@fat.root_dir)
     end
 
-    it "should enumerate the same file names as the standard Dir.glob - relative glob" do
-      VirtFS.dir_chdir(@root)
-      expect(VirtFS::VDir.glob("*/*")).to match_array(@fat.glob_dir)
-    end
+    #it "should enumerate the same file names as the standard Dir.glob - relative glob" do
+    #  VirtFS.dir_chdir(@root)
+    #  expect(VirtFS::VDir.glob("*/*")).to match_array(@fat.glob_dir)
+    #end
   end
 
   describe ".mkdir" do
     it "should raise Runtime Error writes not supported" do
       expect do
-        VirtFS::VDir.mkdir("/not_a_dir/foo.d")
+        VirtFS::VDir.mkdir("/#{@root}/not_a_dir/foo.d")
       end.to raise_error(
         RuntimeError, /writes not supported/
       )
@@ -159,7 +149,7 @@ describe "Fat32::Dir class methods" do
   describe ".new" do
     it "should raise Errno::ENOENT when directory doesn't exist" do
       expect do
-        VirtFS::VDir.new("/not_a_dir")
+        VirtFS::VDir.new("/#{@root}/not_a_dir")
       end.to raise_error(
         RuntimeError, /Can't find directory: '\/not_a_dir'/
       )
@@ -173,7 +163,7 @@ describe "Fat32::Dir class methods" do
   describe ".open" do
     it "should raise Errno::ENOENT when directory doesn't exist" do
       expect do
-        VirtFS::VDir.new("/not_a_dir")
+        VirtFS::VDir.new("/#{@root}/not_a_dir")
       end.to raise_error(
         RuntimeError, /Can't find directory: '\/not_a_dir'/
       )
