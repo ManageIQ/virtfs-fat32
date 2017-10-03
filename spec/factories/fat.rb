@@ -1,6 +1,4 @@
 require 'ostruct'
-require 'virtfs/block_io'
-require 'virt_disk/block_file'
 
 FactoryGirl.define do
   factory :fat, class: OpenStruct do

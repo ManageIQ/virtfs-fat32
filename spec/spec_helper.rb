@@ -5,6 +5,8 @@ require 'virtfs-nativefs-thick'
 require 'virtfs-fat32'
 require 'factory_girl'
 
+require 'virt_disk'
+
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = [:should, :expect]
@@ -24,7 +26,7 @@ RSpec.configure do |config|
                      virtual_root: '/home/mmorsi/workspace/cfme/virtfs-fat32')
     @root    = @fat.mount_point
 
-    block_dev = VirtFS::BlockIO.new(VirtDisk::BlockFile.new(@fat.path))
+    block_dev = VirtDisk::Disk.new(VirtDisk::FileIo.new(@fat.path))
     fatfs     = VirtFS::Fat32::FS.new(block_dev)
 
     VirtFS.mount(fatfs, @root)

@@ -29,8 +29,11 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_runtime_dependency "virtfs"
+  spec.add_runtime_dependency "activesupport", '~> 5'
+  spec.add_runtime_dependency "rufus-lru", '~> 1'
 
   spec.add_development_dependency "bundler", "~> 1.10"
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "rspec"
+  spec.add_development_dependency "factory_girl", '~> 4.7'
 end
