@@ -1,9 +1,15 @@
-$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
+require 'simplecov'
+SimpleCov.start
 
+$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
 require 'virtfs'
-require 'virtfs-nativefs-thick'
 require 'virtfs-fat32'
+require 'virtfs-nativefs-thick'
 require 'factory_girl'
+
+# XXX bug in camcorder (missing dependency)
+require 'fileutils'
+require 'virtfs-camcorderfs'
 
 require 'virt_disk'
 
@@ -21,19 +27,25 @@ RSpec.configure do |config|
   config.before(:all) do
     VirtFS.mount(VirtFS::NativeFS::Thick.new, "/")
 
-    @fat     = build(:fat,
-                     #virtual_root: Dir.pwd)
-                     virtual_root: '/home/mmorsi/workspace/cfme/virtfs-fat32')
-    @root    = @fat.mount_point
+    @orig_dir = Dir.pwd
+    @fat = build(:fat,
+                 recording_path: cassette_path)
 
+    VirtFS.mount(@fat.recorder, File.expand_path("#{@fat.recording_root}"))
+    VirtFS.activate!
+    VirtFS.dir_chdir(@orig_dir)
+
+    @root     = @fat.mount_point
     block_dev = VirtDisk::Disk.new(VirtDisk::FileIo.new(@fat.path))
     fatfs     = VirtFS::Fat32::FS.new(block_dev)
-
-    VirtFS.mount(fatfs, @root)
+    VirtFS.mount(fatfs, @fat.mount_point)
   end
 
   config.after(:all) do
-    VirtFS.umount(@root)
+    VirtFS.deactivate!
+    VirtFS.umount(@fat.mount_point)
+    VirtFS.dir_chdir("/")
+    VirtFS.umount(File.expand_path("#{@fat.recording_root}"))
     VirtFS.umount("/")
   end
 end

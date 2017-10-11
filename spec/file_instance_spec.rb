@@ -1,6 +1,10 @@
 require 'spec_helper'
 
 describe "VirtFS::FAT32::File instance methods" do
+  def cassette_path
+    "spec/cassettes/file_instance.yml"
+  end
+
   before(:all) do
     @full_path = @fat.glob_dir.first
   end

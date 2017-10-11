@@ -1,6 +1,10 @@
 require 'spec_helper'
 
 describe "VirtFS::Fat32::Dir instance methods" do
+  def cassette_path
+    "spec/cassettes/dir_instance.yml"
+  end
+
   describe "#close" do
     it "should return nil" do
       dir = VirtFS::VDir.new(@root)

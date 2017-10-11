@@ -1,6 +1,10 @@
 require 'spec_helper'
 
 describe "Fat32::File class methods" do
+  def cassette_path
+    "spec/cassettes/file_class.yml"
+  end
+
   before(:all) do
     @full_path   = "/#{@root}/d1/c"
     @parent_path = "/#{@root}/d1"
